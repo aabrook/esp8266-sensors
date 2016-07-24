@@ -6,12 +6,12 @@ message_t* clear_message(message_t* message){
   return message;
 }
 
-fn_call assign_pin(int pin, message_t* message, fn_call cb){
+message_t* assign_pin(int pin, message_t* message){
   message->pin = pin;
-  return cb;
+  return message;
 }
 
-fn_call assign_high_low(int action, message_t* message, fn_call cb){
+message_t* assign_action(int action, message_t* message){
   message->action = action;
-  return cb;
+  return message;
 }

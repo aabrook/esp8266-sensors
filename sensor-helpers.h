@@ -22,6 +22,6 @@ typedef message_t* (*fn_chain)(message_t*, fn_call);
 typedef message_t* (*fn_tracks)(message_t*, fn_call, fn_call);
 
 message_t* clear_message(message_t*);
-fn_call assign_pin(int, message_t*, fn_call);
-fn_call assign_high_low(int, message_t*, fn_call);
+message_t* assign_pin(int, message_t*);
+message_t* assign_action(int, message_t*);
 #endif
