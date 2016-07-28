@@ -59,6 +59,7 @@ void (*arduino_sleep)() = TO_DEEP_SLEEP ? deep_sleep : shallow_sleep;
 
 message_t create_publish_message(message_t message){
   message.message = (String("{ \"r\": \"") + ROOM + "\", " + message.message + "}");
+  return message;
 }
 
 message_t read_distance_helper(message_t message){
@@ -69,12 +70,11 @@ message_t read_distance_helper(message_t message){
     create_publish_message
   };
   assign_pin(TRIGGER_PIN, assign_action(ECHO_PIN, message));
-  client.publish("distances", run_chain(distance_fx, 4, &message)->message.c_str());
+  client.publish("distances", run_chain(distance_fx, 4, message).message.c_str());
   return message;
 }
 
 message_t read_temp_helper(message_t message){
-  assign_pin(DHTPIN, message);
   fn_call thermo_fx[] = {
     clear_message,
     init_thermo_sensor,
@@ -82,17 +82,19 @@ message_t read_temp_helper(message_t message){
     free_thermo_sensor,
     create_publish_message
   };
-  client.publish("temperatures", run_chain(thermo_fx, 5, &message)->message.c_str());
+  message = run_chain(thermo_fx, 5, assign_pin(DHTPIN, message));
+  Serial.println("Publishing: " + message.message);
+  client.publish("temperatures", message.message.c_str());
   return message;
 }
 
-message_t* run_chain(fn_call fx[], int count, message_t* message){
-  message_t msg = *message;
+message_t run_chain(fn_call fx[], int count, message_t msg){
   for(int i = 0; i < count; ++i){
     msg = fx[i](msg);
+    Serial.println("Message: " + msg.message);
   }
 
-  return message;
+  return msg;
 }
 
 void reconnect() {
@@ -133,8 +135,9 @@ void loop(void){
     reconnect();
 
   message_t message;
-  wrap_switch(message, read_temp_helper);
-  wrap_switch(assign_pin(RELAY_PIN, message), read_distance_helper);
+  message = wrap_switch(message, read_temp_helper);
+  Serial.println(message.message);
+  //wrap_switch(assign_pin(RELAY_PIN, message), read_distance_helper);
 
   arduino_sleep();
 }
