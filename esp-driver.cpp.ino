@@ -6,6 +6,7 @@
 #include "sensor-helpers.h"
 #include "thermo-sensor.h"
 #include "distance-sensor.h"
+#include "relay.h"
 
 const char* mqtt_server = MQTT_SERVER;
 
@@ -15,7 +16,7 @@ WiFiClient wifiClient;
 PubSubClient client(wifiClient);
 String macAddress;
 
-message_t* wifi_connect(message_t* msg, fn_call resolve, void (*reject)()){
+message_t wifi_connect(message_t msg, fn_call resolve, void (*reject)()){
   wl_status_t status = WiFi.begin(SSID, PASSWORD);
   macAddress = WiFi.macAddress();
 
@@ -26,13 +27,14 @@ message_t* wifi_connect(message_t* msg, fn_call resolve, void (*reject)()){
     Serial.print(".");
     if(millis() - start > RETRY_TIME){
       reject();
+      return message_t();
     }
   }
 
   return resolve(msg);
 }
 
-message_t* debug_wifi(message_t* msg){
+message_t debug_wifi(message_t msg){
   Serial.println("");
   Serial.println("DHT Weather Reading Server");
   Serial.print("Connected to ");
@@ -53,41 +55,25 @@ void shallow_sleep(){
   delay(DELAY_SLEEP);
 }
 
-message_t* create_message(){
-  return new message_t();
-}
-
-message_t* delete_message(message_t* message){
-  delete message;
-  return 0;
-}
-
 void (*arduino_sleep)() = TO_DEEP_SLEEP ? deep_sleep : shallow_sleep;
 
-message_t* create_publish_message(message_t* message){
-  message->message = (String("{ \"r\": \"") + ROOM + "\", " + message->message + "}");
+message_t create_publish_message(message_t message){
+  message.message = (String("{ \"r\": \"") + ROOM + "\", " + message.message + "}");
 }
 
-void setup(void){
-  Serial.begin(115200);
-
-  delay(3000);
-  Serial.print("Starting\n");
-
-  // Connect to WiFi network
-  message_t* message = new message_t();
-  wifi_connect(message, debug_wifi, arduino_sleep);
-
-  delete message;
-  client.setServer(mqtt_server, MQTT_PORT);
+message_t read_distance_helper(message_t message){
+  fn_call distance_fx[] = {
+    clear_message,
+    init_distance_sensor,
+    read_distance,
+    create_publish_message
+  };
+  assign_pin(TRIGGER_PIN, assign_action(ECHO_PIN, message));
+  client.publish("distances", run_chain(distance_fx, 4, &message)->message.c_str());
+  return message;
 }
 
-void loop(void){
-  if (!client.connected())
-    reconnect();
-
-  message_t* message = create_message();
-
+message_t read_temp_helper(message_t message){
   assign_pin(DHTPIN, message);
   fn_call thermo_fx[] = {
     clear_message,
@@ -96,24 +82,14 @@ void loop(void){
     free_thermo_sensor,
     create_publish_message
   };
-  client.publish("temperatures", run_chain(thermo_fx, 5, message)->message.c_str());
-
-  fn_call distance_fx[] = {
-    clear_message,
-    init_distance_sensor,
-    read_distance,
-    create_publish_message
-  };
-  assign_pin(TRIGGER_PIN, assign_action(ECHO_PIN, message));
-  client.publish("distances", run_chain(distance_fx, 4, message)->message.c_str());
-
-  delete_message(message);
-  arduino_sleep();
+  client.publish("temperatures", run_chain(thermo_fx, 5, &message)->message.c_str());
+  return message;
 }
 
 message_t* run_chain(fn_call fx[], int count, message_t* message){
+  message_t msg = *message;
   for(int i = 0; i < count; ++i){
-    fx[i](message);
+    msg = fx[i](msg);
   }
 
   return message;
@@ -138,4 +114,27 @@ void reconnect() {
       delay(5000);
     }
   }
+}
+
+void setup(void){
+  Serial.begin(115200);
+
+  delay(3000);
+  Serial.print("Starting\n");
+
+  // Connect to WiFi network
+  wifi_connect(message_t(), debug_wifi, arduino_sleep);
+
+  client.setServer(mqtt_server, MQTT_PORT);
+}
+
+void loop(void){
+  if (!client.connected())
+    reconnect();
+
+  message_t message;
+  wrap_switch(message, read_temp_helper);
+  wrap_switch(assign_pin(RELAY_PIN, message), read_distance_helper);
+
+  arduino_sleep();
 }
