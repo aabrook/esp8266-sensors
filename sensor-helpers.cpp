@@ -24,3 +24,12 @@ message_t debug_message(message_t message){
 
   return message;
 }
+
+message_t run_chain(fn_call fx[], int count, message_t msg){
+  for(int i = 0; i < count; ++i){
+    msg = fx[i](msg);
+    Serial.println("Message: " + msg.message);
+  }
+
+  return msg;
+}

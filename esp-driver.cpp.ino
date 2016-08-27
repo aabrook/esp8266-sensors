@@ -69,7 +69,7 @@ message_t read_distance_helper(message_t message){
     read_distance,
     create_publish_message
   };
-  assign_pin(TRIGGER_PIN, assign_action(ECHO_PIN, message));
+  message = assign_pin(TRIGGER_PIN, assign_action(ECHO_PIN, message));
   client.publish("distances", run_chain(distance_fx, 4, message).message.c_str());
   return message;
 }
@@ -86,15 +86,6 @@ message_t read_temp_helper(message_t message){
   Serial.println("Publishing: " + message.message);
   client.publish("temperatures", message.message.c_str());
   return message;
-}
-
-message_t run_chain(fn_call fx[], int count, message_t msg){
-  for(int i = 0; i < count; ++i){
-    msg = fx[i](msg);
-    Serial.println("Message: " + msg.message);
-  }
-
-  return msg;
 }
 
 void reconnect() {

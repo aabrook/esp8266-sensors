@@ -26,4 +26,7 @@ message_t assign_pin(int, message_t);
 message_t assign_action(int, message_t);
 message_t debug_message(message_t);
 
+/* Run the functions as a chain */
+message_t run_chain(fn_call fx[], int count, message_t msg);
+
 #endif
