@@ -5,8 +5,6 @@
 #include "env.h"
 #include "sensor-helpers.h"
 #include "thermo-sensor.h"
-#include "distance-sensor.h"
-#include "moisture-sensor.h"
 #include "relay.h"
 #include "either.h"
 
@@ -67,10 +65,6 @@ void shallow_sleep(){
 }
 
 void (*arduino_sleep)() = TO_DEEP_SLEEP ? deep_sleep : shallow_sleep;
-//
-// message_t assign_relay(message_t message){
-//   return assign_pin(RELAY_PIN, message);
-// }
 
 message_t create_publish_message(message_t message){
   message.message = (String("{ \"r\": \"") + ROOM + "\", " + message.message + "}");
@@ -88,73 +82,41 @@ message_t assign_dht(message_t message){
 message_t assign_analog(message_t message){
   return assign_pin(A0, message);
 }
-//
-// message_t read_distance_helper(message_t message){
-//   new Right<message_t>(message)
-//     ->map(&assign_relay)
-//     ->map(&turn_on)
-//     ->map(&assign_echo)
-//     ->map(&clear_message)
-//     ->map(&init_distance_sensor)
-//     ->map(&read_distance)
-//     ->map(&create_publish_message)
-//     ->map(&turn_off);
-//
-//   fn_call distance_fx[] = {
-//     assign_relay,
-//     turn_on,
-//     assign_echo,
-//     clear_message,
-//     init_distance_sensor,
-//     read_distance,
-//     create_publish_message,
-//     assign_relay,
-//     turn_off
-//   };
-//
-//   message = assign_pin(TRIGGER_PIN, message);
-//   client.publish("distances", run_chain(distance_fx, 9, message).message.c_str());
-//   return message;
-// }
 
-message_t read_temp_helper(message_t message){
-  Right<message_t>* result = (new Right<message_t>(message))
-    ->fmap(&clear_message)
-    ->fmap(&assign_dht)
-    ->fmap(&init_thermo_sensor)
-    ->fmap(&debug_message)
-    ->fmap(&read_temp_and_humidity)
-    ->fmap(&debug_message)
-    ->fmap(&free_thermo_sensor)
-    ->fmap(&create_publish_message);
-  // fn_call thermo_fx[] = {
-  //   clear_message,
-  //   assign_dht,
-  //   init_thermo_sensor,
-  //   debug_message,
-  //   read_temp_and_humidity,
-  //   debug_message,
-  //   free_thermo_sensor,
-  //   create_publish_message
-  // };
-  //
-  // message = run_chain(thermo_fx, 8, message);
-  Serial.println("Publishing: " + result->getData().message);
-  client.publish("temperatures", result->getData().message.c_str());
-  return result->getData();
+message_t debug(message_t message){
+  Serial.println(message.message);
+
+  return message;
 }
 
-message_t read_moisture_helper(message_t message){
-  fn_call moisture_fx[] = {
-    clear_message,
-    assign_analog,
-    read_moisture,
-    create_publish_message
-  };
+void errored(message_t* message){
 
-  message = assign_pin(TRIGGER_PIN, message);
-  client.publish("moisture", run_chain(moisture_fx, 4, message).message.c_str());
-  return message;
+}
+
+void publish(message_t* message){
+  Serial.println("Publishing: " + message->message);
+  client.publish("temperatures", message->message.c_str());
+}
+
+message_t read_temp_helper(message_t message){
+  Serial.println("Preparing to read temperature");
+
+  Right<message_t>* result = (new Right<message_t>(message))
+    ->fmap(&clear_message)
+    ->fmap(&debug)
+    ->fmap(&assign_dht)
+    ->fmap(&init_thermo_sensor)
+    ->fmap(&debug)
+    ->fmap(&read_temp_and_humidity)
+    ->fmap(&debug)
+    ->fmap(&free_thermo_sensor)
+    ->fmap(&create_publish_message);
+
+  result->fork(&errored, &publish);
+  message_t data = result->getData();
+  delete result;
+
+  return data;
 }
 
 void reconnect() {
@@ -189,17 +151,26 @@ void setup(void){
   // Connect to WiFi network
   wifi_connect(message_t(), debug_wifi, arduino_sleep);
 
+  Serial.println("Setting MQTT server");
   client.setServer(mqtt_server, MQTT_PORT);
   client.setCallback(subscriber);
+  Serial.println("Setup complete");
 }
 
 void loop(void){
+  Serial.println("Looping");
   if (!client.connected())
     reconnect();
 
   message_t message;
+
+  Serial.println("waiting");
   delay(2000);
-  message = read_moisture_helper(message);
+
+  Serial.println("Reading");
+  message = read_temp_helper(message);
+  // message = read_moisture_helper(message);
+  Serial.println("Read temperature");
   Serial.println(message.message);
   last_check = millis();
 
