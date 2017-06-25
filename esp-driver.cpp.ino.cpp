@@ -1,3 +1,6 @@
+# 1 "/var/folders/fr/n7cnlx8d3lq37pvk5_l7gbkr0000gn/T/tmpsj1suY"
+#include <Arduino.h>
+# 1 "/Users/abrook/Documents/Arduino/esp8266-sensors/esp-driver.cpp.ino"
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
@@ -22,7 +25,7 @@ message_t wifi_connect(message_t msg, fn_call resolve, void (*reject)()){
   wl_status_t status = WiFi.begin(SSID, PASSWORD);
   macAddress = WiFi.macAddress();
 
-  // Wait for connection
+
   long start = millis();
   while (WiFi.status() != WL_CONNECTED && !WiFi.isConnected()) {
     delay(500);
@@ -36,7 +39,21 @@ message_t wifi_connect(message_t msg, fn_call resolve, void (*reject)()){
 
   return resolve(msg);
 }
-
+message_t debug_wifi(message_t msg);
+void deep_sleep();
+void shallow_sleep();
+message_t create_publish_message(message_t message);
+message_t assign_echo(message_t message);
+message_t assign_dht(message_t message);
+message_t assign_analog(message_t message);
+message_t debug(message_t message);
+void errored(message_t* message);
+void publish(message_t* message);
+message_t read_temp_helper(message_t message);
+void reconnect();
+void setup(void);
+void loop(void);
+#line 40 "/Users/abrook/Documents/Arduino/esp8266-sensors/esp-driver.cpp.ino"
 message_t debug_wifi(message_t msg){
   Serial.println("");
   Serial.println("DHT Weather Reading Server");
@@ -114,7 +131,7 @@ message_t read_temp_helper(message_t message){
 }
 
 void reconnect() {
-  // Loop until we're reconnected
+
   long startReconnect = millis();
 
   while (!client.connected()) {
@@ -142,11 +159,11 @@ void setup(void){
   delay(3000);
   Serial.print("Starting\n");
 
-  // Connect to WiFi network
+
   wifi_connect(message_t(), debug_wifi, arduino_sleep);
   while (WiFi.status() != WL_CONNECTED && !WiFi.isConnected()) {
     Serial.println("Connecting to WIFI");
-    
+
     wifi_connect(message_t(), debug_wifi, arduino_sleep);
   }
 
