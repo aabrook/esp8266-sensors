@@ -61,7 +61,7 @@ void deep_sleep(){
 }
 
 void shallow_sleep(){
-  delay(100);
+  delay(DELAY_SLEEP);
 }
 
 void (*arduino_sleep)() = TO_DEEP_SLEEP ? deep_sleep : shallow_sleep;
@@ -169,8 +169,6 @@ void loop(void){
 
   Serial.println("Reading");
   message = read_temp_helper(message);
-  // message = read_moisture_helper(message);
-  Serial.println("Read temperature");
   Serial.println(message.message);
   last_check = millis();
 

@@ -28,7 +28,8 @@ public:
     }
 
     Right* fmap(T (*fmap_f)(const T)){
-        return new Right(fmap_f(data));
+        data = fmap_f(data);
+        return this;
     }
 
     void fork(void (*errored)(T*), void (*success)(T*)){
