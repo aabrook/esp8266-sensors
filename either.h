@@ -1,12 +1,6 @@
 #ifndef EITHER_H
 #define EITHER_H
-
-template <class T>
-class Monad {
-  public:
-    virtual Monad<T>* bind(Monad* (*bind_f)(T)) { return 0; };
-    virtual Monad<T>* fmap(T (*fmap_f)(const T)) { return 0; };
-};
+#include "monad.h"
 
 template <class T>
 class Either : public Monad<T> {

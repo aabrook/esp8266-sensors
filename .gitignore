@@ -3,3 +3,4 @@ env.h
 .clang_complete
 .gcc-flags.json
 .piolibdeps
+*.gch

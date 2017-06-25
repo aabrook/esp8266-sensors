@@ -18,13 +18,6 @@ PubSubClient client(wifiClient);
 String macAddress;
 double last_check = millis();
 
-void subscriber(char* topic, uint8_t* payload, unsigned int length){
-  Serial.println(String("Received ") + topic);
-  if(String(topic) == String(CHECK_TEMPERATURE_TOPIC)) {
-    read_temp_helper(message_t());
-  }
-}
-
 message_t wifi_connect(message_t msg, fn_call resolve, void (*reject)()){
   wl_status_t status = WiFi.begin(SSID, PASSWORD);
   macAddress = WiFi.macAddress();
@@ -35,6 +28,7 @@ message_t wifi_connect(message_t msg, fn_call resolve, void (*reject)()){
     delay(500);
     Serial.print(".");
     if(millis() - start > RETRY_TIME){
+      WiFi.disconnect(true);
       reject();
       return message_t();
     }
@@ -90,7 +84,7 @@ message_t debug(message_t message){
 }
 
 void errored(message_t* message){
-
+  Serial.println("Something went wrong. " + message->message);
 }
 
 void publish(message_t* message){
@@ -153,7 +147,6 @@ void setup(void){
 
   Serial.println("Setting MQTT server");
   client.setServer(mqtt_server, MQTT_PORT);
-  client.setCallback(subscriber);
   Serial.println("Setup complete");
 }
 
