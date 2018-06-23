@@ -28,6 +28,7 @@ message_t wifi_connect(message_t msg, fn_call resolve, void (*reject)()){
     delay(500);
     Serial.print(".");
     if(millis() - start > RETRY_TIME){
+      Serial.print("Failed to connect. Will retry soon");
       WiFi.disconnect(true);
       reject();
       return message_t();
@@ -89,7 +90,7 @@ void errored(message_t* message){
 
 void publish(message_t* message){
   Serial.println("Publishing: " + message->message);
-  client.publish("temperatures", message->message.c_str());
+  String res = "" + client.publish("temperatures", message->message.c_str());
 }
 
 message_t read_temp_helper(message_t message){
@@ -146,7 +147,7 @@ void setup(void){
   wifi_connect(message_t(), debug_wifi, arduino_sleep);
   while (WiFi.status() != WL_CONNECTED && !WiFi.isConnected()) {
     Serial.println("Connecting to WIFI");
-    
+
     wifi_connect(message_t(), debug_wifi, arduino_sleep);
   }
 
@@ -158,6 +159,7 @@ void setup(void){
 
 void loop(void){
   Serial.println("Looping");
+  wifi_connect(message_t(), debug_wifi, arduino_sleep);
   if (!client.connected())
     reconnect();
 
