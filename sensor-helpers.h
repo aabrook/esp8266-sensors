@@ -1,7 +1,7 @@
 #ifndef SENSOR_HELPERS_H
 #define SENSOR_HELPERS_H
 
-#include <arduino.h>
+#include <Arduino.h>
 
 /*
  * Define a uniform structure to use when passing between states
