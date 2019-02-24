@@ -56,6 +56,7 @@ void deep_sleep(){
 }
 
 void shallow_sleep(){
+  WiFi.disconnect(true);
   delay(DELAY_SLEEP);
 }
 

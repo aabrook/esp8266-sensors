@@ -4,3 +4,4 @@ env.h
 .gcc-flags.json
 .piolibdeps
 *.gch
+.vscode
