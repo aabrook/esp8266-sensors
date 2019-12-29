@@ -5,11 +5,7 @@
 #include "sensor-helpers.h"
 #include "DHT.h"
 #include <HttpClient.h>
-#include "OLEDDisplayUi.h"
 #include "SSD1306.h"
-
-const char* mqtt_server = MQTT_SERVER;
-#define CHECK_TEMPERATURE_TOPIC "#"
 
 DHT dht(DHTPIN, DHT22);
 
@@ -22,7 +18,7 @@ SSD1306Wire display(0x3c, 2, 5);
 
 double lastTemperature = 0.0;
 
-message_t wifi_connect(message_t msg, fn_call resolve, void (*reject)()){
+message_t wifi_connect(message_t msg){
   WiFi.begin(SSID, PASSWORD);
   macAddress = WiFi.macAddress();
   String loader = "Starting";
@@ -49,81 +45,32 @@ message_t wifi_connect(message_t msg, fn_call resolve, void (*reject)()){
     }
   }
 
-  return resolve(msg);
-}
-
-message_t debug_wifi(message_t msg){
-  Serial.println("");
-  Serial.println("DHT Weather Reading Server");
-  Serial.print("Connected to ");
-  Serial.println(SSID);
-
-  Serial.println("Reader started");
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
-
   return msg;
 }
-
-void deep_sleep(){
-  WiFi.disconnect(true);
-  ESP.deepSleep(DEEP_SLEEP);
-}
-
-void shallow_sleep(){
-  WiFi.disconnect(true);
-  int previousTime = millis();
-  do {
-    Serial.println(String(millis() - previousTime) + " < " + DEEP_SLEEP);
-    // busy waiting
-  } while(millis() - previousTime < DELAY_SLEEP);
-}
-
-void (*arduino_sleep)() = TO_DEEP_SLEEP ? deep_sleep : shallow_sleep;
 
 message_t create_publish_message(message_t message){
   message.message = String(ROOM) + "/" + message.message;
   return message;
 }
 
-message_t assign_echo(message_t message){
-  return assign_action(ECHO_PIN, message);
-}
-
-message_t assign_dht(message_t message){
-  return assign_pin(DHTPIN, message);
-}
-
-message_t assign_analog(message_t message){
-  return assign_pin(A0, message);
-}
-
-message_t debug(message_t message){
-  Serial.println(message.message);
-
-  return message;
-}
-
-void errored(message_t* message){
-  Serial.println("Something went wrong. " + message->message);
-}
-
 void publish(message_t message){
   HttpClient httpClient(wifiClient);
   int result = httpClient.get(PUBLISH_SERVER, PUBLISH_PORT, (String("/") + message.message).c_str());
+
   Serial.println("Published to pi: [" + String(result) + "] " + httpClient.responseStatusCode());
+  if (httpClient.responseStatusCode() != 200) {
+    display.clear();
+    display.drawString(0, 0, String("Publish failed: ") + httpClient.responseStatusCode());
+    display.display();
+    delay(3000);
+  }
 } 
 
-message_t read_temp_helper(message_t message){
+message_t read_temp(message_t message){
   Serial.println("Preparing to read temperature");
   lastTemperature = dht.readTemperature(false);
   message.message = String(lastTemperature) + "/" + String(dht.readHumidity());
-  message = create_publish_message(message);
 
-  display.clear();
-  display.drawString(0, 0, "Publishing...");
-  display.display();
-  publish(message);
   return message;
 }
 
@@ -143,11 +90,11 @@ void setup(void){
   Serial.println("Starting");
 
   // Connect to WiFi network
-  wifi_connect(message_t(), debug_wifi, arduino_sleep);
+  wifi_connect(message_t());
   while (WiFi.status() != WL_CONNECTED && !WiFi.isConnected()) {
     Serial.println("Connecting to WIFI");
 
-    wifi_connect(message_t(), debug_wifi, arduino_sleep);
+    wifi_connect(message_t());
   }
 
   dht.begin();
@@ -156,7 +103,7 @@ void setup(void){
 void loop(void){
   if (millis() - last_check > DELAY_SLEEP || last_check == 0) {
     Serial.println("Prepare read");
-    wifi_connect(message_t(), debug_wifi, arduino_sleep);
+    wifi_connect(message_t());
 
     message_t message;
 
@@ -167,8 +114,18 @@ void loop(void){
     delay(2000);
 
     Serial.println("Reading");
-    message = read_temp_helper(message);
+    message = read_temp(message);
+    message = create_publish_message(message);
+
+    display.clear();
+    display.drawString(0, 0, "Publishing...");
+    display.display();
+    publish(message);
+
     Serial.println(message.message);
+
+    WiFi.disconnect();
+    
     last_check = millis();
   }
   
@@ -176,6 +133,6 @@ void loop(void){
   int range = (lastTemperature / 50) * 100;
   display.setTextAlignment(TEXT_ALIGN_CENTER_BOTH);
   display.drawProgressBar(0, 32, 120, 15, range);
-  display.drawString(64, 15, String(lastTemperature));
+  display.drawString(64, 15, String(ROOM) + ": " + String(lastTemperature));
   display.display();
 }
