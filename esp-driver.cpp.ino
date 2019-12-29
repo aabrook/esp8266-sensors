@@ -18,7 +18,7 @@ SSD1306Wire display(0x3c, 2, 5);
 
 double lastTemperature = 0.0;
 
-message_t wifi_connect(message_t msg){
+bool wifi_connect(){
   WiFi.begin(SSID, PASSWORD);
   macAddress = WiFi.macAddress();
   String loader = "Starting";
@@ -40,12 +40,27 @@ message_t wifi_connect(message_t msg){
       display.display();
 
       WiFi.disconnect(true);
-      exit(2);
-      return message_t();
+      return false;
     }
   }
 
-  return msg;
+  return true;
+}
+
+void display_temperature() {
+  display.clear();
+  int range = (lastTemperature / 50) * 100;
+  display.setTextAlignment(TEXT_ALIGN_CENTER_BOTH);
+  display.drawProgressBar(0, 32, 120, 15, range);
+  display.drawString(64, 15, String(ROOM) + ": " + String(lastTemperature));
+  display.display();
+}
+
+void displayMessage(String message, int delayTime = 1500) {
+  display.clear();
+  display.drawString(0, 0, message);
+  display.display();
+  delay(delayTime);
 }
 
 message_t create_publish_message(message_t message){
@@ -53,16 +68,25 @@ message_t create_publish_message(message_t message){
   return message;
 }
 
+String errorMessage(int message) {
+  String messages[] = {
+    "Success",
+    "Connection Failed",
+    "Error API",
+    "Timed Out",
+    "Invalid Response"
+  };
+
+  return messages[message * -1];
+}
 void publish(message_t message){
   HttpClient httpClient(wifiClient);
+  delay(1500);
   int result = httpClient.get(PUBLISH_SERVER, PUBLISH_PORT, (String("/") + message.message).c_str());
 
-  Serial.println("Published to pi: [" + String(result) + "] " + httpClient.responseStatusCode());
+  Serial.println("Published to pi: [" + errorMessage(result) + "] " + httpClient.responseStatusCode());
   if (httpClient.responseStatusCode() != 200) {
-    display.clear();
-    display.drawString(0, 0, String("Publish failed: ") + httpClient.responseStatusCode());
-    display.display();
-    delay(3000);
+    displayMessage(String("Publish failed: \n") + errorMessage(result) + "\n" + httpClient.responseStatusCode(), 3000);
   }
 } 
 
@@ -83,56 +107,43 @@ void setup(void){
 
   display.flipScreenVertically();
   display.setFont(ArialMT_Plain_10);
-  display.drawString(0, 0, String("Starting"));
-  display.display();
+  displayMessage("Starting", 3000);
 
-  delay(3000);
   Serial.println("Starting");
 
   // Connect to WiFi network
-  wifi_connect(message_t());
-  while (WiFi.status() != WL_CONNECTED && !WiFi.isConnected()) {
-    Serial.println("Connecting to WIFI");
-
-    wifi_connect(message_t());
-  }
+  wifi_connect();
 
   dht.begin();
 }
 
+
 void loop(void){
   if (millis() - last_check > DELAY_SLEEP || last_check == 0) {
     Serial.println("Prepare read");
-    wifi_connect(message_t());
+    wifi_connect();
 
     message_t message;
 
-    display.clear();
-    display.drawString(0, 0, "Reading...");
-    display.display();
-    Serial.println("waiting");
-    delay(2000);
+    displayMessage("Reading...");
 
     Serial.println("Reading");
     message = read_temp(message);
-    message = create_publish_message(message);
 
-    display.clear();
-    display.drawString(0, 0, "Publishing...");
-    display.display();
-    publish(message);
-
+    if (WiFi.status() == WL_CONNECTED && WiFi.isConnected()) {
+      displayMessage("Publishing...", 0);
+      message = create_publish_message(message);
+      publish(message);
+    } else {
+      displayMessage("No WiFi connection");
+    }
+ 
     Serial.println(message.message);
 
     WiFi.disconnect();
-    
+
     last_check = millis();
   }
-  
-  display.clear();
-  int range = (lastTemperature / 50) * 100;
-  display.setTextAlignment(TEXT_ALIGN_CENTER_BOTH);
-  display.drawProgressBar(0, 32, 120, 15, range);
-  display.drawString(64, 15, String(ROOM) + ": " + String(lastTemperature));
-  display.display();
+
+  display_temperature(); 
 }
