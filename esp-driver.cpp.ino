@@ -18,6 +18,22 @@ SSD1306Wire display(0x3c, 2, 5);
 
 double lastTemperature = 0.0;
 
+void display_temperature() {
+  display.clear();
+  int range = (lastTemperature / 50) * 100;
+  display.setTextAlignment(TEXT_ALIGN_CENTER_BOTH);
+  display.drawProgressBar(0, 32, 120, 15, range);
+  display.drawString(64, 15, String(ROOM) + ": " + String(lastTemperature));
+  display.display();
+}
+
+void displayMessage(String message, int delayTime = 1500) {
+  display.clear();
+  display.drawString(0, 0, message);
+  display.display();
+  delay(delayTime);
+}
+
 bool wifi_connect(){
   WiFi.begin(SSID, PASSWORD);
   macAddress = WiFi.macAddress();
@@ -44,23 +60,8 @@ bool wifi_connect(){
     }
   }
 
+  displayMessage(String("Connected to network\n") + SSID, 3000);
   return true;
-}
-
-void display_temperature() {
-  display.clear();
-  int range = (lastTemperature / 50) * 100;
-  display.setTextAlignment(TEXT_ALIGN_CENTER_BOTH);
-  display.drawProgressBar(0, 32, 120, 15, range);
-  display.drawString(64, 15, String(ROOM) + ": " + String(lastTemperature));
-  display.display();
-}
-
-void displayMessage(String message, int delayTime = 1500) {
-  display.clear();
-  display.drawString(0, 0, message);
-  display.display();
-  delay(delayTime);
 }
 
 message_t create_publish_message(message_t message){
@@ -112,7 +113,7 @@ void setup(void){
   Serial.println("Starting");
 
   // Connect to WiFi network
-  wifi_connect();
+  // wifi_connect();
 
   dht.begin();
 }
@@ -140,7 +141,7 @@ void loop(void){
  
     Serial.println(message.message);
 
-    WiFi.disconnect();
+    WiFi.disconnect(true);
 
     last_check = millis();
   }
