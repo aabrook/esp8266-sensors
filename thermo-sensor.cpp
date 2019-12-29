@@ -1,41 +1,40 @@
-#include "thermo-sensor.h"
-#include "DHT.h"
-#include "env.h"
+// #include "thermo-sensor.h"
+// #include "DHT.h"
+// #include "env.h"
 
-DHT* dht;
 
-message_t init_thermo_sensor(message_t init){
-  dht = new DHT(init.pin, DHTTYPE, 20);
-  return init;
-}
+// message_t init_thermo_sensor(message_t init){
+//   //dht = DHT(init.pin, DHT22);
+//   return init;
+// }
 
-message_t free_thermo_sensor(message_t message){
-  delete dht;
-  return message;
-}
+// message_t free_thermo_sensor(message_t message){
+//   // delete dht;
+//   return message;
+// }
 
-message_t read_temp(message_t message){
-  message.message += "\"t\": \""
-    + String((int)dht->readTemperature())
-    + "\"";
+// message_t read_temp(message_t message){
+//   message.message += "\"t\": \""
+//     + String(dht.readTemperature())
+//     + "\"";
 
-  return message;
-}
+//   return message;
+// }
 
-message_t read_humidity(message_t message){
-  message.message += "\"h\": \""
-    + String((int)dht->readHumidity())
-    + "\"";
+// message_t read_humidity(message_t message){
+//   message.message += "\"h\": \""
+//     + String(dht.readHumidity())
+//     + "\"";
 
-  return message;
+//   return message;
 
-}
+// }
 
-message_t read_temp_and_humidity(message_t message){
-  String temp_result = read_temp(clear_message(message)).message;
-  String humidity_result = read_humidity(clear_message(message)).message;
+// message_t read_temp_and_humidity(message_t message){
+//   String temp_result = read_temp(clear_message(message)).message;
+//   String humidity_result = read_humidity(clear_message(message)).message;
 
-  message.message = temp_result + "," + humidity_result;
+//   message.message = temp_result + "," + humidity_result;
 
-  return message;
-}
+//   return message;
+// }

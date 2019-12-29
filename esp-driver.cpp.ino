@@ -1,36 +1,50 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
-#include <PubSubClient.h>
 #include "env.h"
 #include "sensor-helpers.h"
-#include "thermo-sensor.h"
-#include "relay.h"
-#include "either.h"
+#include "DHT.h"
+#include <HttpClient.h>
+#include "OLEDDisplayUi.h"
+#include "SSD1306.h"
 
 const char* mqtt_server = MQTT_SERVER;
 #define CHECK_TEMPERATURE_TOPIC "#"
 
-void reconnect();
+DHT dht(DHTPIN, DHT22);
 
 WiFiClient wifiClient;
-PubSubClient client(wifiClient);
 String macAddress;
-double last_check = millis();
+
+double last_check = 0;
+// Initialize the OLED display using Wire library
+SSD1306Wire display(0x3c, 2, 5);
+
+double lastTemperature = 0.0;
 
 message_t wifi_connect(message_t msg, fn_call resolve, void (*reject)()){
-  wl_status_t status = WiFi.begin(SSID, PASSWORD);
+  WiFi.begin(SSID, PASSWORD);
   macAddress = WiFi.macAddress();
+  String loader = "Starting";
 
   // Wait for connection
   long start = millis();
   while (WiFi.status() != WL_CONNECTED && !WiFi.isConnected()) {
     delay(500);
+    loader = loader + ".";
+    display.clear();
+    display.drawString(0, 0, loader);
+    display.display();
+
     Serial.print(".");
     if(millis() - start > RETRY_TIME){
       Serial.print("Failed to connect. Will retry soon");
+      display.clear();
+      display.drawString(0, 0, String("Failed to connect"));
+      display.display();
+
       WiFi.disconnect(true);
-      reject();
+      exit(2);
       return message_t();
     }
   }
@@ -52,18 +66,23 @@ message_t debug_wifi(message_t msg){
 }
 
 void deep_sleep(){
+  WiFi.disconnect(true);
   ESP.deepSleep(DEEP_SLEEP);
 }
 
 void shallow_sleep(){
   WiFi.disconnect(true);
-  delay(DELAY_SLEEP);
+  int previousTime = millis();
+  do {
+    Serial.println(String(millis() - previousTime) + " < " + DEEP_SLEEP);
+    // busy waiting
+  } while(millis() - previousTime < DELAY_SLEEP);
 }
 
 void (*arduino_sleep)() = TO_DEEP_SLEEP ? deep_sleep : shallow_sleep;
 
 message_t create_publish_message(message_t message){
-  message.message = (String("{ \"r\": \"") + ROOM + "\", " + message.message + "}");
+  message.message = String(ROOM) + "/" + message.message;
   return message;
 }
 
@@ -89,60 +108,39 @@ void errored(message_t* message){
   Serial.println("Something went wrong. " + message->message);
 }
 
-void publish(message_t* message){
-  Serial.println("Publishing: " + message->message);
-  String res = "" + client.publish("temperatures", message->message.c_str());
-}
+void publish(message_t message){
+  HttpClient httpClient(wifiClient);
+  int result = httpClient.get(PUBLISH_SERVER, PUBLISH_PORT, (String("/") + message.message).c_str());
+  Serial.println("Published to pi: [" + String(result) + "] " + httpClient.responseStatusCode());
+} 
 
 message_t read_temp_helper(message_t message){
   Serial.println("Preparing to read temperature");
+  lastTemperature = dht.readTemperature(false);
+  message.message = String(lastTemperature) + "/" + String(dht.readHumidity());
+  message = create_publish_message(message);
 
-  Right<message_t>* result = (new Right<message_t>(message))
-    ->fmap(&clear_message)
-    ->fmap(&debug)
-    ->fmap(&assign_dht)
-    ->fmap(&init_thermo_sensor)
-    ->fmap(&debug)
-    ->fmap(&read_temp_and_humidity)
-    ->fmap(&debug)
-    ->fmap(&free_thermo_sensor)
-    ->fmap(&create_publish_message);
-
-  result->fork(&errored, &publish);
-  message_t data = result->getData();
-  delete result;
-
-  return data;
-}
-
-void reconnect() {
-  // Loop until we're reconnected
-  long startReconnect = millis();
-
-  while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-
-    if (client.connect(macAddress.c_str(), MQTT_USER, MQTT_PASS)) {
-      Serial.println("connected");
-      client.subscribe(CHECK_TEMPERATURE_TOPIC);
-
-    } else {
-      if(millis() - startReconnect > RETRY_TIME){
-        arduino_sleep();
-        return;
-      }
-
-      delay(5000);
-    }
-  }
+  display.clear();
+  display.drawString(0, 0, "Publishing...");
+  display.display();
+  publish(message);
+  return message;
 }
 
 void setup(void){
   Serial.begin(115200);
   WiFi.disconnect(true);
 
+  bool initialised = display.init();
+  Serial.println("Intialised? " + String(initialised));
+
+  display.flipScreenVertically();
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(0, 0, String("Starting"));
+  display.display();
+
   delay(3000);
-  Serial.print("Starting\n");
+  Serial.println("Starting");
 
   // Connect to WiFi network
   wifi_connect(message_t(), debug_wifi, arduino_sleep);
@@ -152,27 +150,32 @@ void setup(void){
     wifi_connect(message_t(), debug_wifi, arduino_sleep);
   }
 
-
-  Serial.println("Setting MQTT server");
-  client.setServer(mqtt_server, MQTT_PORT);
-  Serial.println("Setup complete");
+  dht.begin();
 }
 
 void loop(void){
-  Serial.println("Looping");
-  wifi_connect(message_t(), debug_wifi, arduino_sleep);
-  if (!client.connected())
-    reconnect();
+  if (millis() - last_check > DELAY_SLEEP || last_check == 0) {
+    Serial.println("Prepare read");
+    wifi_connect(message_t(), debug_wifi, arduino_sleep);
 
-  message_t message;
+    message_t message;
 
-  Serial.println("waiting");
-  delay(2000);
+    display.clear();
+    display.drawString(0, 0, "Reading...");
+    display.display();
+    Serial.println("waiting");
+    delay(2000);
 
-  Serial.println("Reading");
-  message = read_temp_helper(message);
-  Serial.println(message.message);
-  last_check = millis();
-
-  arduino_sleep();
+    Serial.println("Reading");
+    message = read_temp_helper(message);
+    Serial.println(message.message);
+    last_check = millis();
+  }
+  
+  display.clear();
+  int range = (lastTemperature / 50) * 100;
+  display.setTextAlignment(TEXT_ALIGN_CENTER_BOTH);
+  display.drawProgressBar(0, 32, 120, 15, range);
+  display.drawString(64, 15, String(lastTemperature));
+  display.display();
 }
