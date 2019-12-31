@@ -51,9 +51,7 @@ bool wifi_connect(){
     Serial.print(".");
     if(millis() - start > RETRY_TIME){
       Serial.print("Failed to connect. Will retry soon");
-      display.clear();
-      display.drawString(0, 0, String("Failed to connect"));
-      display.display();
+      displayMessage("Failed to connect");
 
       WiFi.disconnect(true);
       return false;
@@ -70,24 +68,25 @@ message_t create_publish_message(message_t message){
 }
 
 String errorMessage(int message) {
-  String messages[] = {
-    "Success",
-    "Connection Failed",
-    "Error API",
-    "Timed Out",
-    "Invalid Response"
-  };
-
-  return messages[message * -1];
+  switch(message) {
+    case HTTP_SUCCESS: return "Success";
+    case HTTP_ERROR_CONNECTION_FAILED: return "Connection failed";
+    case HTTP_ERROR_API: return "ERROR API";
+    case HTTP_ERROR_TIMED_OUT: return "Request timed out";
+    case HTTP_ERROR_INVALID_RESPONSE: return "Invalid response";
+    default: return "Error Unknown";
+  }
 }
 void publish(message_t message){
   HttpClient httpClient(wifiClient);
-  delay(1500);
   int result = httpClient.get(PUBLISH_SERVER, PUBLISH_PORT, (String("/") + message.message).c_str());
 
   Serial.println("Published to pi: [" + errorMessage(result) + "] " + httpClient.responseStatusCode());
-  if (httpClient.responseStatusCode() != 200) {
-    displayMessage(String("Publish failed: \n") + errorMessage(result) + "\n" + httpClient.responseStatusCode(), 3000);
+  if (httpClient.responseStatusCode() != 200 || result != HTTP_SUCCESS) {
+    displayMessage(String("Publish failed: ") + httpClient.responseStatusCode() + "\n" + errorMessage(result) + "\n", 3000);
+    String response = httpClient.readString();
+    Serial.println("Server response: " + response);
+    displayMessage(response, 3000);
   }
 } 
 
