@@ -259,7 +259,7 @@ bool DHT::read(bool force) {
     break;
   case DHT11:
   default:
-    delay(20); // data sheet says at least 18ms, 20ms just to be safe
+    delay(30); // data sheet says at least 18ms, 20ms just to be safe
     break;
   }
 
